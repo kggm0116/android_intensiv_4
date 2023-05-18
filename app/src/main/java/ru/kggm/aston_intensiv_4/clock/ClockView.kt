@@ -10,6 +10,10 @@ import android.util.Log
 import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
 import androidx.annotation.ColorInt
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import ru.kggm.aston_intensiv_4.utility.dip2px
 import java.time.LocalTime
 import kotlin.math.PI
@@ -134,32 +138,8 @@ class ClockView @JvmOverloads constructor(
             }
         }
 
-    private var currentSecondsAngle = (LocalTime.now().second * (2 * PI / 60 - PI / 2)).toFloat()
-        set(value) {
-            if (field != value) {
-                field = value
-                invalidate()
-            }
-        }
-    private var currentMinutesAngle = (LocalTime.now().minute * (2 * PI / 60 - PI / 2)).toFloat()
-        set(value) {
-            if (field != value) {
-                field = value
-                invalidate()
-            }
-        }
-    private var currentHoursAngle = ((LocalTime.now().hour % 12) * (2 * PI / 12 - PI / 2)).toFloat()
-        set(value) {
-            if (field != value) {
-                field = value
-                invalidate()
-            }
-        }
-
     init {
-        startHoursHandAnimator()
-        startMinutesHandAnimator()
-        startSecondsHandAnimator()
+        startSimpleAnimator()
     }
 
     var notchesVisible = customAttrs.notchesVisible
@@ -299,10 +279,10 @@ class ClockView @JvmOverloads constructor(
             val angle = PI / 6 * (iHour - 3)
             val x = centerX + (cos(angle)
                     * (radius * (1 - HOURS_TEXT_OFFSET_PERC) - textHeight))
-                .toFloat()
+                    .toFloat()
             val y = centerY + (sin(angle)
                     * (radius * (1 - HOURS_TEXT_OFFSET_PERC) - textHeight))
-                .toFloat()
+                    .toFloat()
             canvas.drawText(
                 iHour.toString(),
                 x,
@@ -315,96 +295,70 @@ class ClockView @JvmOverloads constructor(
     private fun drawSecondsHand(canvas: Canvas) {
         if (!customAttrs.secondsHandVisible)
             return
-        val angle = currentSecondsAngle //ANGLES[currentSecond]
+        val angle = ANGLES[currentSecond]
         val startX = centerX + (cos(angle) * radius * HAND_CENTER_OFFSET_PERC).toFloat()
         val startY = centerY + (sin(angle) * radius * HAND_CENTER_OFFSET_PERC).toFloat()
         val stopX = centerX + (cos(angle) * (radius * SECONDS_HAND_LENGTH_PERC)).toFloat()
-        val stopY = centerY + (sin(angle) * (radius * SECONDS_HAND_LENGTH_PERC)).toFloat()
+        val stopY = centerY + (sin(angle) * (radius * SECONDS_HAND_LENGTH_PERC + secondsHandWidth)).toFloat()
         canvas.drawLine(startX, startY, stopX, stopY, secondsHandPaint)
     }
 
     private fun drawMinutesHand(canvas: Canvas) {
         if (!customAttrs.minutesHandVisible)
             return
-        val angle = currentMinutesAngle // ANGLES[currentMinute]
+        val angle = ANGLES[currentMinute]
         val startX = centerX + (cos(angle) * radius * HAND_CENTER_OFFSET_PERC).toFloat()
         val startY = centerY + (sin(angle) * radius * HAND_CENTER_OFFSET_PERC).toFloat()
         val stopX = centerX + (cos(angle) * (radius * MINUTES_HAND_LENGTH_PERC)).toFloat()
-        val stopY = centerY + (sin(angle) * (radius * MINUTES_HAND_LENGTH_PERC)).toFloat()
+        val stopY = centerY + (sin(angle) * (radius * MINUTES_HAND_LENGTH_PERC + minutesHandWidth)).toFloat()
         canvas.drawLine(startX, startY, stopX, stopY, minutesHandPaint)
     }
 
     private fun drawHoursHand(canvas: Canvas) {
         if (!customAttrs.hoursHandVisible)
             return
-        val angle = currentHoursAngle // ANGLES[currentHourBase12 % 12 * 5]
+        val angle = ANGLES[currentHourBase12 % 12 * 5]
         val startX = centerX + (cos(angle) * radius * HAND_CENTER_OFFSET_PERC).toFloat()
         val startY = centerY + (sin(angle) * radius * HAND_CENTER_OFFSET_PERC).toFloat()
         val stopX = centerX + (cos(angle) * (radius * HOURS_HAND_LENGTH_PERC)).toFloat()
-        val stopY = centerY + (sin(angle) * (radius * HOURS_HAND_LENGTH_PERC)).toFloat()
+        val stopY = centerY + (sin(angle) * (radius * HOURS_HAND_LENGTH_PERC + hoursHandWidth)).toFloat()
         canvas.drawLine(startX, startY, stopX, stopY, hoursHandPaint)
     }
 
-    private var secondsHandAnimator: ValueAnimator? = null
-    private fun startSecondsHandAnimator() {
-        secondsHandAnimator = ValueAnimator.ofFloat(0f, 2 * PI.toFloat()).apply {
-            setCurrentFraction(currentSecondsAngle / 2 * PI.toFloat())
-            duration = 60 * 1000L
-            repeatCount = ValueAnimator.INFINITE
-            interpolator = LinearInterpolator()
-            addUpdateListener { animator ->
-                (animator.animatedValue as Float).let {
-//                    if (it != currentSecond) {
-//                        currentSecond = it
-//                        invalidate()
-//                    }
-                    currentSecondsAngle = it
-                    invalidate()
-                }
+    private var running = true
+    private fun startSimpleAnimator() {
+        CoroutineScope(Dispatchers.Main).launch {
+            while (running) {
+                delay(1000)
+                onNextSecond()
             }
-            start()
         }
     }
 
-    private var minutesHandAnimator: ValueAnimator? = null
-    private fun startMinutesHandAnimator() {
-        minutesHandAnimator = ValueAnimator.ofFloat(0f, 2 * PI.toFloat()).apply {
-            setCurrentFraction(currentMinutesAngle / 2 * PI.toFloat())
-            duration = 60 * 60 * 1000L
-            repeatCount = ValueAnimator.INFINITE
-            interpolator = LinearInterpolator()
-            addUpdateListener { animator ->
-                (animator.animatedValue as Float).let {
-//                    if (it != currentMinute) {
-//                        currentMinute = it
-//                        invalidate()
-//                    }
-                    currentMinutesAngle = it
-                    invalidate()
-                }
-            }
-            start()
+    private fun onNextSecond() {
+        if (currentSecond == 59) {
+            onNextMinute()
+            currentSecond = 0
+        }
+        else {
+            currentSecond++
         }
     }
 
-    private var hoursHandAnimator: ValueAnimator? = null
-    private fun startHoursHandAnimator() {
-        hoursHandAnimator = ValueAnimator.ofFloat(0f, 2 * PI.toFloat()).apply {
-            setCurrentFraction(currentHoursAngle / 2 * PI.toFloat())
-            duration = 12 * 60 * 60 * 1000L
-            repeatCount = ValueAnimator.INFINITE
-            interpolator = LinearInterpolator()
-            addUpdateListener { animator ->
-                (animator.animatedValue as Float).let {
-//                    if (it != currentHourBase12) {
-//                        currentHourBase12 = it
-//                        invalidate()
-//                    }
-                    currentHoursAngle = it
-                    invalidate()
-                }
-            }
-            start()
+    private fun onNextMinute() {
+        if (currentMinute == 59) {
+            onNextHour()
+            currentMinute = 0
         }
+        else {
+            currentMinute++
+        }
+    }
+
+    private fun onNextHour() {
+        if (currentHourBase12 == 11)
+            currentHourBase12 = 0
+        else
+            currentHourBase12++
     }
 }
