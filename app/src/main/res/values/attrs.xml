@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="ClockView">
+        <attr name="notchesColor" format="color"/>
+        <attr name="notchesVisible" format="boolean"/>
+        
+        <attr name="hoursTextColor" format="color"/>
+        <attr name="hoursTextVisible" format="boolean"/>
+        <attr name="hoursTextSize" format="dimension"/>
+
+        <attr name="secondsHandColor" format="color"/>
+        <attr name="minutesHandColor" format="color"/>
+        <attr name="hoursHandColor" format="color"/>
+        
+        <attr name="secondsHandVisible" format="boolean"/>
+        <attr name="minutesHandVisible" format="boolean"/>
+        <attr name="hoursHandVisible" format="boolean"/>
+    </declare-styleable>
+</resources>
