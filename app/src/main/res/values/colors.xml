@@ -13,4 +13,10 @@
     <color name="gray_600">#FF757575</color>
 
     <color name="transparent">#0000</color>
+    <color name="dim_red">#600</color>
+    <color name="dim_yellow">#660</color>
+    <color name="dim_green">#060</color>
+    <color name="dim_cyan">#066</color>
+    <color name="dim_blue">#006</color>
+    <color name="dim_purple">#606</color>
 </resources>

@@ -1,13 +1,17 @@
 package ru.kggm.aston_intensiv_4.clock
 
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.util.AttributeSet
+import android.util.Log
+import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
 import androidx.annotation.ColorInt
 import ru.kggm.aston_intensiv_4.utility.dip2px
+import java.time.LocalTime
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.min
@@ -22,28 +26,39 @@ class ClockView @JvmOverloads constructor(
     companion object {
         private const val FRAME_WIDTH_DP = 4
         private const val PADDING_DP = 16
-        private const val SECOND_NOTCH_LENGTH_PERC = 0.08f
-        private const val MINUTE_NOTCH_LENGTH_PERC = 0.16f
-        private const val HOURS_TEXT_OFFSET_PERC = 0.2f
+        private const val SECONDS_NOTCH_LENGTH_PERC = 0.08f
+        private const val MINUTES_NOTCH_LENGTH_PERC = 0.16f
+
+        private const val HOURS_TEXT_OFFSET_PERC = 0.1f
+
+        private const val HAND_CENTER_OFFSET_PERC = 0.05f
+
+        private const val SECONDS_HAND_LENGTH_PERC = 0.8f
+        private const val SECONDS_HAND_WIDTH_DP = 1
+
+        private const val MINUTES_HAND_LENGTH_PERC = 0.55f
+        private const val MINUTES_HAND_WIDTH_DP = 4
+
+        private const val HOURS_HAND_LENGTH_PERC = 0.4f
+        private const val HOURS_HAND_WIDTH_DP = 8
+
         private const val NOTCH_WIDTH_DP = 2
 
-        private val NOTCH_ANGLES by lazy { (0 until 60).map { PI / 30 * it } }
+        private val ANGLES by lazy { (0 until 60).map { 2 * PI / 60 * it - PI / 2 } }
     }
 
     private val customAttrs = ClockViewAttrs(context, attrs, defStyleAttr)
 
     private val padding by lazy { dip2px(PADDING_DP) }
-    private val notchWidth by lazy { dip2px(NOTCH_WIDTH_DP) }
 
-    private var notchesVisible = customAttrs.notchesVisible
-    private var secondsHandVisible = customAttrs.secondsHandVisible
-    private var minutesHandVisible = customAttrs.minutesHandVisible
-    private var hoursHandVisible = customAttrs.hoursHandVisible
-    private var hoursTextVisible = customAttrs.hoursTextVisible
+    private val notchWidth by lazy { dip2px(NOTCH_WIDTH_DP) }
+    private val secondsHandWidth by lazy { dip2px(HOURS_HAND_WIDTH_DP) }
+    private val minutesHandWidth by lazy { dip2px(MINUTES_HAND_WIDTH_DP) }
+    private val hoursHandWidth by lazy { dip2px(HOURS_HAND_WIDTH_DP) }
 
     private val notchesPaint by lazy {
         Paint().apply {
-            color = customAttrs.notchColor
+            color = notchColor
             style = Paint.Style.STROKE
             strokeWidth = dip2px(FRAME_WIDTH_DP)
             isAntiAlias = true
@@ -52,8 +67,8 @@ class ClockView @JvmOverloads constructor(
 
     private val secondsHandPaint by lazy {
         Paint().apply {
-            color = customAttrs.secondsHandColor
-            style = Paint.Style.STROKE
+            color = secondsHandColor
+            style = Paint.Style.FILL
             strokeWidth = dip2px(FRAME_WIDTH_DP)
             isAntiAlias = true
         }
@@ -61,8 +76,8 @@ class ClockView @JvmOverloads constructor(
 
     private val minutesHandPaint by lazy {
         Paint().apply {
-            color = customAttrs.minutesHandColor
-            style = Paint.Style.STROKE
+            color = minutesHandColor
+            style = Paint.Style.FILL
             strokeWidth = dip2px(FRAME_WIDTH_DP)
             isAntiAlias = true
         }
@@ -70,8 +85,8 @@ class ClockView @JvmOverloads constructor(
 
     private val hoursHandPaint by lazy {
         Paint().apply {
-            color = customAttrs.hoursHandColor
-            style = Paint.Style.STROKE
+            color = hoursHandColor
+            style = Paint.Style.FILL
             strokeWidth = dip2px(FRAME_WIDTH_DP)
             isAntiAlias = true
         }
@@ -79,9 +94,10 @@ class ClockView @JvmOverloads constructor(
 
     private val hoursTextPaint by lazy {
         Paint().apply {
-            color = customAttrs.hoursTextColor
-            textSize = customAttrs.hoursTextSize
-            style = Paint.Style.STROKE
+            color = hoursTextColor
+            textSize = hoursTextSize
+            textAlign = Paint.Align.CENTER
+            style = Paint.Style.FILL_AND_STROKE
             typeface = Typeface.DEFAULT
             strokeWidth = dip2px(FRAME_WIDTH_DP)
             isAntiAlias = true
@@ -92,60 +108,153 @@ class ClockView @JvmOverloads constructor(
     private var centerY = 0f
     private var radius = 0f
 
-    fun setNotchesVisible(value: Boolean) {
-        notchesVisible = value
-        invalidate()
+    private var currentSecond = LocalTime.now().second
+        set(value) {
+            if (field != value) {
+                field = value
+                Log.i("CLOCK", "Second: $value")
+                invalidate()
+            }
+        }
+    private var currentMinute = LocalTime.now().minute
+        set(value) {
+            if (field != value) {
+                field = value
+                Log.i("CLOCK", "Minute: $value")
+                invalidate()
+            }
+        }
+    private var currentHourBase12 = (LocalTime.now().hour % 12)
+        set(value) {
+            val base12hour = (value % 12).coerceIn(0..11)
+            if (field != base12hour) {
+                field = base12hour
+                Log.i("CLOCK", "Hour: $base12hour")
+                invalidate()
+            }
+        }
+
+    private var currentSecondsAngle = (LocalTime.now().second * (2 * PI / 60 - PI / 2)).toFloat()
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+    private var currentMinutesAngle = (LocalTime.now().minute * (2 * PI / 60 - PI / 2)).toFloat()
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+    private var currentHoursAngle = ((LocalTime.now().hour % 12) * (2 * PI / 12 - PI / 2)).toFloat()
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
+    init {
+        startHoursHandAnimator()
+        startMinutesHandAnimator()
+        startSecondsHandAnimator()
     }
 
-    fun setSecondsHandVisible(value: Boolean) {
-        secondsHandVisible = value
-        invalidate()
-    }
+    var notchesVisible = customAttrs.notchesVisible
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
 
-    fun setMinutesHandVisible(value: Boolean) {
-        minutesHandVisible = value
-        invalidate()
-    }
+    var secondsHandVisible = customAttrs.secondsHandVisible
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
 
-    fun setHoursHandVisible(value: Boolean) {
-        hoursHandVisible = value
-        invalidate()
-    }
+    var minutesHandVisible = customAttrs.minutesHandVisible
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
 
-    fun setHoursTextVisible(value: Boolean) {
-        hoursTextVisible = value
-        invalidate()
-    }
+    var hoursHandVisible = customAttrs.hoursHandVisible
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
 
-    fun setNotchColor(@ColorInt value: Int) {
-        notchesPaint.color = value
-        invalidate()
-    }
+    var hoursTextVisible = customAttrs.hoursTextVisible
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
 
-    fun setSecondHandColor(@ColorInt value: Int) {
-        secondsHandPaint.color = value
-        invalidate()
-    }
+    var notchColor = customAttrs.notchColor
+        set(@ColorInt value) {
+            if (field != value) {
+                field = value
+                notchesPaint.color = value
+                invalidate()
+            }
+        }
 
-    fun setMinuteHandColor(@ColorInt value: Int) {
-        minutesHandPaint.color = value
-        invalidate()
-    }
+    var secondsHandColor = customAttrs.secondsHandColor
+        set(@ColorInt value) {
+            if (field != value) {
+                field = value
+                secondsHandPaint.color = value
+                invalidate()
+            }
+        }
 
-    fun setHourHandColor(@ColorInt value: Int) {
-        hoursHandPaint.color = value
-        invalidate()
-    }
+    var hoursHandColor = customAttrs.hoursHandColor
+        set(@ColorInt value) {
+            if (field != value) {
+                field = value
+                hoursHandPaint.color = value
+                invalidate()
+            }
+        }
 
-    fun setHourTextColor(@ColorInt value: Int) {
-        hoursTextPaint.color = value
-        invalidate()
-    }
+    var minutesHandColor = customAttrs.minutesHandColor
+        set(@ColorInt value) {
+            if (field != value) {
+                field = value
+                minutesHandPaint.color = value
+                invalidate()
+            }
+        }
 
-    fun setHoursTextSize(value: Float) {
-        hoursTextPaint.textSize = value
-        invalidate()
-    }
+    var hoursTextColor = customAttrs.hoursTextColor
+        set(@ColorInt value) {
+            if (field != value) {
+                field = value
+                hoursTextPaint.color = value
+                invalidate()
+            }
+        }
+
+    var hoursTextSize = customAttrs.hoursTextSize
+        set(value) {
+            if (field != value) {
+                field = value
+                hoursTextPaint.textSize = value
+                invalidate()
+            }
+        }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
@@ -158,6 +267,9 @@ class ClockView @JvmOverloads constructor(
         super.onDraw(canvas)
         drawNotches(canvas)
         drawHoursText(canvas)
+        drawHoursHand(canvas)
+        drawMinutesHand(canvas)
+        drawSecondsHand(canvas)
     }
 
     private fun drawNotches(canvas: Canvas) {
@@ -165,14 +277,14 @@ class ClockView @JvmOverloads constructor(
             return
         for (iSecond in 0 until 60) {
             val notchLength = when {
-                iSecond % 5 == 0 -> MINUTE_NOTCH_LENGTH_PERC
-                else -> SECOND_NOTCH_LENGTH_PERC
+                iSecond % 5 == 0 -> MINUTES_NOTCH_LENGTH_PERC
+                else -> SECONDS_NOTCH_LENGTH_PERC
             } * radius
 
-            val startX = centerX + (cos(NOTCH_ANGLES[iSecond]) * radius).toFloat()
-            val startY = centerY + (sin(NOTCH_ANGLES[iSecond]) * radius).toFloat()
-            val stopX = centerX + (cos(NOTCH_ANGLES[iSecond]) * (radius - notchLength)).toFloat()
-            val stopY = centerY + (sin(NOTCH_ANGLES[iSecond]) * (radius - notchLength)).toFloat()
+            val startX = centerX + (cos(ANGLES[iSecond]) * radius).toFloat()
+            val startY = centerY + (sin(ANGLES[iSecond]) * radius).toFloat()
+            val stopX = centerX + (cos(ANGLES[iSecond]) * (radius - notchLength)).toFloat()
+            val stopY = centerY + (sin(ANGLES[iSecond]) * (radius - notchLength)).toFloat()
 
             canvas.drawLine(startX, startY, stopX, stopY, notchesPaint)
         }
@@ -186,15 +298,15 @@ class ClockView @JvmOverloads constructor(
         for (iHour in 1..12) {
             val angle = PI / 6 * (iHour - 3)
             val x = centerX + (cos(angle)
-                    * (radius - textHeight * 3f))
-                    .toFloat()
+                    * (radius * (1 - HOURS_TEXT_OFFSET_PERC) - textHeight))
+                .toFloat()
             val y = centerY + (sin(angle)
-                    * (radius - textHeight * 3f))
-                    .toFloat()
+                    * (radius * (1 - HOURS_TEXT_OFFSET_PERC) - textHeight))
+                .toFloat()
             canvas.drawText(
                 iHour.toString(),
                 x,
-                y - hoursTextPaint.fontMetrics.descent,
+                y + hoursTextPaint.fontMetrics.descent,
                 hoursTextPaint
             )
         }
@@ -203,17 +315,96 @@ class ClockView @JvmOverloads constructor(
     private fun drawSecondsHand(canvas: Canvas) {
         if (!customAttrs.secondsHandVisible)
             return
-
+        val angle = currentSecondsAngle //ANGLES[currentSecond]
+        val startX = centerX + (cos(angle) * radius * HAND_CENTER_OFFSET_PERC).toFloat()
+        val startY = centerY + (sin(angle) * radius * HAND_CENTER_OFFSET_PERC).toFloat()
+        val stopX = centerX + (cos(angle) * (radius * SECONDS_HAND_LENGTH_PERC)).toFloat()
+        val stopY = centerY + (sin(angle) * (radius * SECONDS_HAND_LENGTH_PERC)).toFloat()
+        canvas.drawLine(startX, startY, stopX, stopY, secondsHandPaint)
     }
 
     private fun drawMinutesHand(canvas: Canvas) {
         if (!customAttrs.minutesHandVisible)
             return
-
+        val angle = currentMinutesAngle // ANGLES[currentMinute]
+        val startX = centerX + (cos(angle) * radius * HAND_CENTER_OFFSET_PERC).toFloat()
+        val startY = centerY + (sin(angle) * radius * HAND_CENTER_OFFSET_PERC).toFloat()
+        val stopX = centerX + (cos(angle) * (radius * MINUTES_HAND_LENGTH_PERC)).toFloat()
+        val stopY = centerY + (sin(angle) * (radius * MINUTES_HAND_LENGTH_PERC)).toFloat()
+        canvas.drawLine(startX, startY, stopX, stopY, minutesHandPaint)
     }
 
     private fun drawHoursHand(canvas: Canvas) {
         if (!customAttrs.hoursHandVisible)
             return
+        val angle = currentHoursAngle // ANGLES[currentHourBase12 % 12 * 5]
+        val startX = centerX + (cos(angle) * radius * HAND_CENTER_OFFSET_PERC).toFloat()
+        val startY = centerY + (sin(angle) * radius * HAND_CENTER_OFFSET_PERC).toFloat()
+        val stopX = centerX + (cos(angle) * (radius * HOURS_HAND_LENGTH_PERC)).toFloat()
+        val stopY = centerY + (sin(angle) * (radius * HOURS_HAND_LENGTH_PERC)).toFloat()
+        canvas.drawLine(startX, startY, stopX, stopY, hoursHandPaint)
+    }
+
+    private var secondsHandAnimator: ValueAnimator? = null
+    private fun startSecondsHandAnimator() {
+        secondsHandAnimator = ValueAnimator.ofFloat(0f, 2 * PI.toFloat()).apply {
+            setCurrentFraction(currentSecondsAngle / 2 * PI.toFloat())
+            duration = 60 * 1000L
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = LinearInterpolator()
+            addUpdateListener { animator ->
+                (animator.animatedValue as Float).let {
+//                    if (it != currentSecond) {
+//                        currentSecond = it
+//                        invalidate()
+//                    }
+                    currentSecondsAngle = it
+                    invalidate()
+                }
+            }
+            start()
+        }
+    }
+
+    private var minutesHandAnimator: ValueAnimator? = null
+    private fun startMinutesHandAnimator() {
+        minutesHandAnimator = ValueAnimator.ofFloat(0f, 2 * PI.toFloat()).apply {
+            setCurrentFraction(currentMinutesAngle / 2 * PI.toFloat())
+            duration = 60 * 60 * 1000L
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = LinearInterpolator()
+            addUpdateListener { animator ->
+                (animator.animatedValue as Float).let {
+//                    if (it != currentMinute) {
+//                        currentMinute = it
+//                        invalidate()
+//                    }
+                    currentMinutesAngle = it
+                    invalidate()
+                }
+            }
+            start()
+        }
+    }
+
+    private var hoursHandAnimator: ValueAnimator? = null
+    private fun startHoursHandAnimator() {
+        hoursHandAnimator = ValueAnimator.ofFloat(0f, 2 * PI.toFloat()).apply {
+            setCurrentFraction(currentHoursAngle / 2 * PI.toFloat())
+            duration = 12 * 60 * 60 * 1000L
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = LinearInterpolator()
+            addUpdateListener { animator ->
+                (animator.animatedValue as Float).let {
+//                    if (it != currentHourBase12) {
+//                        currentHourBase12 = it
+//                        invalidate()
+//                    }
+                    currentHoursAngle = it
+                    invalidate()
+                }
+            }
+            start()
+        }
     }
 }

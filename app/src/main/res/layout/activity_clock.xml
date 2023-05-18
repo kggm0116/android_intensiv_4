@@ -15,9 +15,12 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:notchesColor="@color/purple_500"
+        app:notchesColor="@color/dim_cyan"
+        app:hoursTextColor="@color/dim_green"
+        app:hoursTextSize="32sp"
         app:notchesVisible="true"
-        app:hoursTextSize="36sp"
-        app:hoursTextColor="@color/purple_700" />
+        app:secondsHandColor="@color/dim_red"
+        app:minutesHandColor="@color/dim_purple"
+        app:hoursHandColor="@color/dim_blue" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
